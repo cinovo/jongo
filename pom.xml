@@ -43,7 +43,7 @@
 
     <issueManagement>
         <system>github</system>
-        <url>https://github.com/bguerout/jongo/issues</url>
+        <url>https://github.com/cinovo/jongo/issues</url>
     </issueManagement>
 
     <ciManagement>
@@ -65,9 +65,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git@github.com:bguerout/jongo.git</connection>
-        <developerConnection>scm:git:git@github.com:bguerout/jongo.git</developerConnection>
-        <url>git@github.com:bguerout/jongo</url>
+        <connection>scm:git:git@github.com:cinovo/jongo.git</connection>
+        <developerConnection>scm:git:git@github.com:cinovo/jongo.git</developerConnection>
+        <url>git@github.com:cinovo/jongo</url>
     </scm>
 
     <prerequisites>

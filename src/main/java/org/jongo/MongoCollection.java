@@ -16,203 +16,206 @@
 
 package org.jongo;
 
+import org.bson.types.ObjectId;
+import org.jongo.query.Query;
+
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
 import com.mongodb.WriteResult;
-import org.bson.types.ObjectId;
-import org.jongo.query.Query;
-
 
 public class MongoCollection {
 
-    public static final String MONGO_DOCUMENT_ID_NAME = "_id";
-    public static final String MONGO_QUERY_OID = "$oid";
-    private static final Object[] NO_PARAMETERS = {};
-    private static final String ALL = "{}";
+	public static final String MONGO_DOCUMENT_ID_NAME = "_id";
+	public static final String MONGO_QUERY_OID = "$oid";
+	private static final Object[] NO_PARAMETERS = {};
+	private static final String ALL = "{}";
 
-    private final DBCollection collection;
-    private final WriteConcern writeConcern;
-    private final ReadPreference readPreference;
-    private final Mapper mapper;
+	private final DBCollection collection;
+	private final WriteConcern writeConcern;
+	private final ReadPreference readPreference;
+	private final Mapper mapper;
+	private DBCollection historyCollection;
 
-    public MongoCollection(DBCollection dbCollection, Mapper mapper) {
-        this(dbCollection, mapper, dbCollection.getWriteConcern(), dbCollection.getReadPreference());
 
-    }
+	public MongoCollection(DBCollection dbCollection, DBCollection dbHistoryCollection, Mapper mapper) {
+		this(dbCollection, dbHistoryCollection, mapper, dbCollection.getWriteConcern(), dbCollection.getReadPreference());
+	}
 
-    private MongoCollection(DBCollection dbCollection, Mapper mapper, WriteConcern writeConcern, ReadPreference readPreference) {
-        this.collection = dbCollection;
-        this.writeConcern = writeConcern;
-        this.readPreference = readPreference;
-        this.mapper = mapper;
-    }
+	private MongoCollection(DBCollection dbCollection, DBCollection dbHistoryCollection, Mapper mapper, WriteConcern writeConcern, ReadPreference readPreference) {
+		this.collection = dbCollection;
+		this.historyCollection = dbHistoryCollection;
+		this.writeConcern = writeConcern;
+		this.readPreference = readPreference;
+		this.mapper = mapper;
+	}
 
-    public MongoCollection withWriteConcern(WriteConcern concern) {
-        return new MongoCollection(collection, mapper, concern, readPreference);
-    }
+	public MongoCollection withWriteConcern(WriteConcern concern) {
+		return new MongoCollection(this.collection, this.historyCollection, this.mapper, concern, this.readPreference);
+	}
 
-    public MongoCollection withReadPreference(ReadPreference readPreference) {
-        return new MongoCollection(collection, mapper, writeConcern, readPreference);
-    }
+	public MongoCollection withReadPreference(ReadPreference readPreference) {
+		return new MongoCollection(this.collection, this.historyCollection, this.mapper, this.writeConcern, readPreference);
+	}
 
-    public FindOne findOne(ObjectId id) {
-        if (id == null) {
-            throw new IllegalArgumentException("Object id must not be null");
-        }
-        return new FindOne(collection, readPreference, mapper.getUnmarshaller(), mapper.getQueryFactory(), "{_id:#}", id);
-    }
+	public FindOne findOne(ObjectId id) {
+		if (id == null) {
+			throw new IllegalArgumentException("Object id must not be null");
+		}
+		return new FindOne(this.collection, this.readPreference, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), "{_id:#}", id);
+	}
 
-    public FindOne findOne() {
-        return findOne(ALL);
-    }
+	public FindOne findOne() {
+		return this.findOne(MongoCollection.ALL);
+	}
 
-    public FindOne findOne(String query) {
-        return findOne(query, NO_PARAMETERS);
-    }
+	public FindOne findOne(String query) {
+		return this.findOne(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public FindOne findOne(String query, Object... parameters) {
-        return new FindOne(collection, readPreference, mapper.getUnmarshaller(), mapper.getQueryFactory(), query, parameters);
-    }
+	public FindOne findOne(String query, Object... parameters) {
+		return new FindOne(this.collection, this.readPreference, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
+	}
 
-    public Find find() {
-        return find(ALL);
-    }
+	public Find find() {
+		return this.find(MongoCollection.ALL);
+	}
 
-    public Find find(String query) {
-        return find(query, NO_PARAMETERS);
-    }
+	public Find find(String query) {
+		return this.find(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public Find find(String query, Object... parameters) {
-        return new Find(collection, readPreference, mapper.getUnmarshaller(), mapper.getQueryFactory(), query, parameters);
-    }
+	public Find find(String query, Object... parameters) {
+		return new Find(this.collection, this.readPreference, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
+	}
 
-    public FindAndModify findAndModify() {
-        return findAndModify(ALL);
-    }
+	public FindAndModify findAndModify() {
+		return this.findAndModify(MongoCollection.ALL);
+	}
 
-    public FindAndModify findAndModify(String query) {
-        return findAndModify(query, NO_PARAMETERS);
-    }
+	public FindAndModify findAndModify(String query) {
+		return this.findAndModify(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public FindAndModify findAndModify(String query, Object... parameters) {
-        return new FindAndModify(collection, mapper.getUnmarshaller(), mapper.getQueryFactory(), query, parameters);
-    }
+	public FindAndModify findAndModify(String query, Object... parameters) {
+		return new FindAndModify(this.collection, this.historyCollection, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
+	}
 
-    public long count() {
-        return collection.getCount(readPreference);
-    }
+	public long count() {
+		return this.collection.getCount(this.readPreference);
+	}
 
-    public long count(String query) {
-        return count(query, NO_PARAMETERS);
-    }
+	public long count(String query) {
+		return this.count(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public long count(String query, Object... parameters) {
-        DBObject dbQuery = createQuery(query, parameters).toDBObject();
-        return collection.getCount(dbQuery, null, readPreference);
-    }
+	public long count(String query, Object... parameters) {
+		DBObject dbQuery = this.createQuery(query, parameters).toDBObject();
+		return this.collection.getCount(dbQuery, null, this.readPreference);
+	}
 
-    public Update update(String query) {
-        return update(query, NO_PARAMETERS);
-    }
+	public Update update(String query) {
+		return this.update(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public Update update(ObjectId id) {
-        if (id == null) {
-            throw new IllegalArgumentException("Object id must not be null");
-        }
-        return update("{_id:#}", id);
-    }
+	public Update update(ObjectId id) {
+		if (id == null) {
+			throw new IllegalArgumentException("Object id must not be null");
+		}
+		return this.update("{_id:#}", id);
+	}
 
-    public Update update(String query, Object... parameters) {
-        return new Update(collection, writeConcern, mapper.getQueryFactory(), query, parameters);
-    }
+	public Update update(String query, Object... parameters) {
+		return new Update(this.collection, this.historyCollection, this.writeConcern, this.mapper.getQueryFactory(), query, parameters);
+	}
 
-    public WriteResult save(Object pojo) {
-        return new Insert(collection, writeConcern, mapper.getMarshaller(), mapper.getObjectIdUpdater(), mapper.getQueryFactory()).save(pojo);
-    }
+	public WriteResult save(Object pojo) {
+		return new Insert(this.collection, this.historyCollection, this.writeConcern, this.mapper.getMarshaller(), this.mapper.getObjectIdUpdater(), this.mapper.getQueryFactory()).save(pojo);
+	}
 
-    public WriteResult insert(Object pojo) {
-        return insert(new Object[]{pojo});
-    }
+	public WriteResult insert(Object pojo) {
+		return this.insert(new Object[] {pojo});
+	}
 
-    public WriteResult insert(String query) {
-        return insert(query, NO_PARAMETERS);
-    }
+	public WriteResult insert(String query) {
+		return this.insert(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public WriteResult insert(Object... pojos) {
-        return new Insert(collection, writeConcern, mapper.getMarshaller(), mapper.getObjectIdUpdater(), mapper.getQueryFactory()).insert(pojos);
-    }
+	public WriteResult insert(Object... pojos) {
+		return new Insert(this.collection, this.historyCollection, this.writeConcern, this.mapper.getMarshaller(), this.mapper.getObjectIdUpdater(), this.mapper.getQueryFactory()).insert(pojos);
+	}
 
-    public WriteResult insert(String query, Object... parameters) {
-        return new Insert(collection, writeConcern, mapper.getMarshaller(), mapper.getObjectIdUpdater(), mapper.getQueryFactory()).insert(query, parameters);
-    }
+	public WriteResult insert(String query, Object... parameters) {
+		return new Insert(this.collection, this.historyCollection, this.writeConcern, this.mapper.getMarshaller(), this.mapper.getObjectIdUpdater(), this.mapper.getQueryFactory()).insert(query, parameters);
+	}
 
-    public WriteResult remove(ObjectId id) {
-        return remove("{" + MONGO_DOCUMENT_ID_NAME + ":#}", id);
-    }
+	public WriteResult remove(ObjectId id) {
+		return this.remove("{" + MongoCollection.MONGO_DOCUMENT_ID_NAME + ":#}", id);
+	}
 
-    public WriteResult remove() {
-        return remove(ALL);
-    }
+	public WriteResult remove() {
+		return this.remove(MongoCollection.ALL);
+	}
 
-    public WriteResult remove(String query) {
-        return remove(query, NO_PARAMETERS);
-    }
+	public WriteResult remove(String query) {
+		return this.remove(query, MongoCollection.NO_PARAMETERS);
+	}
 
-    public WriteResult remove(String query, Object... parameters) {
-        return collection.remove(createQuery(query, parameters).toDBObject(), writeConcern);
-    }
+	public WriteResult remove(String query, Object... parameters) {
+		return this.collection.remove(this.createQuery(query, parameters).toDBObject(), this.writeConcern);
+	}
 
-    public Distinct distinct(String key) {
-        return new Distinct(collection, mapper.getUnmarshaller(), mapper.getQueryFactory(), key);
-    }
+	public Distinct distinct(String key) {
+		return new Distinct(this.collection, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), key);
+	}
 
-    public Aggregate aggregate(String pipelineOperator) {
-        return aggregate(pipelineOperator, NO_PARAMETERS);
-    }
+	public Aggregate aggregate(String pipelineOperator) {
+		return this.aggregate(pipelineOperator, MongoCollection.NO_PARAMETERS);
+	}
 
-    public Aggregate aggregate(String pipelineOperator, Object... parameters) {
-        return new Aggregate(collection, mapper.getUnmarshaller(), mapper.getQueryFactory()).and(pipelineOperator, parameters);
-    }
+	public Aggregate aggregate(String pipelineOperator, Object... parameters) {
+		return new Aggregate(this.collection, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory()).and(pipelineOperator, parameters);
+	}
 
-    public void drop() {
-        collection.drop();
-    }
+	public void drop() {
+		this.collection.drop();
+	}
 
-    public void dropIndex(String keys) {
-        collection.dropIndex(createQuery(keys).toDBObject());
-    }
+	public void dropIndex(String keys) {
+		this.collection.dropIndex(this.createQuery(keys).toDBObject());
+	}
 
-    public void dropIndexes() {
-        collection.dropIndexes();
-    }
+	public void dropIndexes() {
+		this.collection.dropIndexes();
+	}
 
-    public void ensureIndex(String keys) {
-        collection.createIndex(createQuery(keys).toDBObject());
-    }
+	public void ensureIndex(String keys) {
+		this.collection.createIndex(this.createQuery(keys).toDBObject());
+	}
 
-    public void ensureIndex(String keys, String options) {
-        collection.createIndex(createQuery(keys).toDBObject(), createQuery(options).toDBObject());
-    }
+	public void ensureIndex(String keys, String options) {
+		this.collection.createIndex(this.createQuery(keys).toDBObject(), this.createQuery(options).toDBObject());
+	}
 
-    public String getName() {
-        return collection.getName();
-    }
+	public String getName() {
+		return this.collection.getName();
+	}
 
-    public DBCollection getDBCollection() {
-        return collection;
-    }
+	public DBCollection getDBCollection() {
+		return this.collection;
+	}
 
-    private Query createQuery(String query, Object... parameters) {
-        return mapper.getQueryFactory().createQuery(query, parameters);
-    }
+	private Query createQuery(String query, Object... parameters) {
+		return this.mapper.getQueryFactory().createQuery(query, parameters);
+	}
 
-    @Override
-    public String toString() {
-        if (collection != null)
-            return "collection {" + "name: '" + collection.getName() + "', db: '" + collection.getDB().getName() + "'}";
-        else
-            return super.toString();
-    }
+	@Override
+	public String toString() {
+		if (this.collection != null) {
+			return "collection {" + "name: '" + this.collection.getName() + "', db: '" + this.collection.getDB().getName() + "'}";
+		} else {
+			return super.toString();
+		}
+	}
 }

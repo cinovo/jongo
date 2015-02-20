@@ -16,7 +16,9 @@
 
 package org.jongo;
 
-import com.mongodb.*;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.bson.LazyBSONCallback;
 import org.bson.types.ObjectId;
 import org.jongo.bson.Bson;
@@ -24,106 +26,124 @@ import org.jongo.bson.BsonDocument;
 import org.jongo.marshall.Marshaller;
 import org.jongo.query.QueryFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.mongodb.BasicDBList;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.LazyDBObject;
+import com.mongodb.WriteConcern;
+import com.mongodb.WriteResult;
 
 class Insert {
+	
+	private final Marshaller marshaller;
+	private final DBCollection collection;
+	private final ObjectIdUpdater objectIdUpdater;
+	private final QueryFactory queryFactory;
+	private WriteConcern writeConcern;
+	private DBCollection historyCollection;
+	
+	
+	Insert(DBCollection collection, DBCollection historyCollection, WriteConcern writeConcern, Marshaller marshaller, ObjectIdUpdater objectIdUpdater, QueryFactory queryFactory) {
+		this.historyCollection = historyCollection;
+		this.writeConcern = writeConcern;
+		this.marshaller = marshaller;
+		this.collection = collection;
+		this.objectIdUpdater = objectIdUpdater;
+		this.queryFactory = queryFactory;
+	}
+	
+	public WriteResult save(Object pojo) {
+		Object id = this.preparePojo(pojo);
+		DBObject dbo = Jongo.copyToHistoryCollection(this.convertToDBObject(pojo, id), this.historyCollection);
+		if (pojo instanceof IWithVersion) {
+			Jongo.increaseVersion((IWithVersion) pojo);
+		}
+		return this.collection.save(dbo, this.writeConcern);
+	}
 
-    private final Marshaller marshaller;
-    private final DBCollection collection;
-    private final ObjectIdUpdater objectIdUpdater;
-    private final QueryFactory queryFactory;
-    private WriteConcern writeConcern;
+	public WriteResult insert(Object... pojos) {
+		List<DBObject> dbos = new ArrayList<DBObject>(pojos.length);
+		for (Object pojo : pojos) {
+			Object id = this.preparePojo(pojo);
+			DBObject dbo = this.convertToDBObject(pojo, id);
+			dbos.add(Jongo.copyToHistoryCollection(dbo, this.historyCollection));
+			if (pojo instanceof IWithVersion) {
+				Jongo.increaseVersion((IWithVersion) pojo);
+			}
+		}
+		return this.collection.insert(dbos, this.writeConcern);
+	}
+	
+	public WriteResult insert(String query, Object... parameters) {
+		DBObject dbo = this.queryFactory.createQuery(query, parameters).toDBObject();
+		if (dbo instanceof BasicDBList) {
+			return this.insert(((BasicDBList) dbo).toArray());
+		}
 
-    Insert(DBCollection collection, WriteConcern writeConcern, Marshaller marshaller, ObjectIdUpdater objectIdUpdater, QueryFactory queryFactory) {
-        this.writeConcern = writeConcern;
-        this.marshaller = marshaller;
-        this.collection = collection;
-        this.objectIdUpdater = objectIdUpdater;
-        this.queryFactory = queryFactory;
-    }
+		dbo = Jongo.copyToHistoryCollection(dbo, this.historyCollection);
 
-    public WriteResult save(Object pojo) {
-        Object id = preparePojo(pojo);
-        DBObject dbo = convertToDBObject(pojo, id);
-        return collection.save(dbo, writeConcern);
-    }
+		return this.collection.insert(dbo, this.writeConcern);
+	}
 
-    public WriteResult insert(Object... pojos) {
-        List<DBObject> dbos = new ArrayList<DBObject>(pojos.length);
-        for (Object pojo : pojos) {
-            Object id = preparePojo(pojo);
-            DBObject dbo = convertToDBObject(pojo, id);
-            dbos.add(dbo);
-        }
-        return collection.insert(dbos, writeConcern);
-    }
+	private Object preparePojo(Object pojo) {
+		if (this.objectIdUpdater.mustGenerateObjectId(pojo)) {
+			ObjectId newOid = ObjectId.get();
+			this.objectIdUpdater.setObjectId(pojo, newOid);
+			return newOid;
+		}
+		return this.objectIdUpdater.getId(pojo);
+	}
+	
+	private DBObject convertToDBObject(Object pojo, Object id) {
+		BsonDocument document = Insert.asBsonDocument(this.marshaller, pojo);
+		return new LazyIdDBObject(document.toByteArray(), this.marshaller, id);
+	}
+	
+	
+	private final static class LazyIdDBObject extends LazyDBObject {
+		
+		private Object bsonId;
+		private final Marshaller marshaller;
+		
+		
+		private LazyIdDBObject(byte[] data, Marshaller marshaller, Object _id) {
+			super(data, new LazyBSONCallback());
+			this.marshaller = marshaller;
+			this.bsonId = this.asBsonId(_id);
+		}
+		
+		private Object asBsonId(Object _id) {
+			if ((_id == null) || Bson.isPrimitive(_id)) {
+				return _id;
+			}
+			return Insert.asBsonDocument(this.marshaller, _id).toDBObject();
+		}
+		
+		@Override
+		public Object put(String key, Object v) {
+			if ("_id".equals(key)) {
+				this.bsonId = this.asBsonId(key);
+				return null; // fixme
+			}
+			throw new UnsupportedOperationException("Object is read only for fields others than _id");
+		}
+		
+		@Override
+		public Object get(String key) {
+			if ("_id".equals(key) && (this.bsonId != null)) {
+				return this.bsonId;
+			}
+			return super.get(key);
+		}
+	}
 
-    public WriteResult insert(String query, Object... parameters) {
-        DBObject dbQuery = queryFactory.createQuery(query, parameters).toDBObject();
-        if (dbQuery instanceof BasicDBList) {
-            return insert(((BasicDBList) dbQuery).toArray());
-        } else {
-            return collection.insert(dbQuery, writeConcern);
-        }
-    }
 
-    private Object preparePojo(Object pojo) {
-        if (objectIdUpdater.mustGenerateObjectId(pojo)) {
-            ObjectId newOid = ObjectId.get();
-            objectIdUpdater.setObjectId(pojo, newOid);
-            return newOid;
-        }
-        return objectIdUpdater.getId(pojo);
-    }
-
-    private DBObject convertToDBObject(Object pojo, Object id) {
-        BsonDocument document = asBsonDocument(marshaller, pojo);
-        return new LazyIdDBObject(document.toByteArray(), marshaller, id);
-    }
-
-    private final static class LazyIdDBObject extends LazyDBObject {
-
-        private Object bsonId;
-        private final Marshaller marshaller;
-
-        private LazyIdDBObject(byte[] data, Marshaller marshaller, Object _id) {
-            super(data, new LazyBSONCallback());
-            this.marshaller = marshaller;
-            this.bsonId = asBsonId(_id);
-        }
-
-        private Object asBsonId(Object _id) {
-            if (_id == null || Bson.isPrimitive(_id)) {
-                return _id;
-            }
-            return asBsonDocument(marshaller, _id).toDBObject();
-        }
-
-        @Override
-        public Object put(String key, Object v) {
-            if ("_id".equals(key)) {
-                this.bsonId = asBsonId(key);
-                return null; //fixme
-            }
-            throw new UnsupportedOperationException("Object is read only for fields others than _id");
-        }
-
-        @Override
-        public Object get(String key) {
-            if ("_id".equals(key) && bsonId != null) {
-                return this.bsonId;
-            }
-            return super.get(key);
-        }
-    }
-
-    private static BsonDocument asBsonDocument(Marshaller marshaller, Object obj) {
-        try {
-            return marshaller.marshall(obj);
-        } catch (Exception e) {
-            String message = String.format("Unable to save object %s due to a marshalling error", obj);
-            throw new IllegalArgumentException(message, e);
-        }
-    }
+	private static BsonDocument asBsonDocument(Marshaller marshaller, Object obj) {
+		try {
+			return marshaller.marshall(obj);
+		} catch (Exception e) {
+			String message = String.format("Unable to save object %s due to a marshalling error", obj);
+			throw new IllegalArgumentException(message, e);
+		}
+	}
 }

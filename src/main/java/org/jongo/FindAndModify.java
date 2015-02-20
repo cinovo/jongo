@@ -16,85 +16,100 @@
 
 package org.jongo;
 
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
 import org.jongo.marshall.Unmarshaller;
 import org.jongo.query.Query;
 import org.jongo.query.QueryFactory;
 
-import static org.jongo.ResultHandlerFactory.newResultHandler;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
 
 public class FindAndModify {
+	
+	private final DBCollection collection;
+	private final Unmarshaller unmarshaller;
+	private final QueryFactory queryFactory;
+	private final Query query;
+	private Query fields, sort, modifier;
+	private boolean remove = false;
+	private boolean returnNew = false;
+	private boolean upsert = false;
+	private DBCollection historyCollection;
+	
+	
+	FindAndModify(DBCollection collection, DBCollection historyCollection, Unmarshaller unmarshaller, QueryFactory queryFactory, String query, Object... parameters) {
+		this.historyCollection = historyCollection;
+		this.unmarshaller = unmarshaller;
+		this.collection = collection;
+		this.queryFactory = queryFactory;
+		this.query = this.queryFactory.createQuery(query, parameters);
+	}
+	
+	public FindAndModify with(String modifier, Object... parameters) {
+		if (modifier == null) {
+			throw new IllegalArgumentException("Modifier may not be null");
+		}
+		this.modifier = this.queryFactory.createQuery(modifier, parameters);
+		return this;
+	}
+	
+	public <T> T as(final Class<T> clazz) {
+		return this.map(ResultHandlerFactory.newResultHandler(clazz, this.unmarshaller));
+	}
+	
+	public <T> T map(ResultHandler<T> resultHandler) {
+		
+		DBObject dbObject = this.query.toDBObject();
 
-    private final DBCollection collection;
-    private final Unmarshaller unmarshaller;
-    private final QueryFactory queryFactory;
-    private final Query query;
-    private Query fields, sort, modifier;
-    private boolean remove = false;
-    private boolean returnNew = false;
-    private boolean upsert = false;
+		// first modify elements
+		DBObject result = this.collection.findAndModify(dbObject, this.getAsDBObject(this.fields), this.getAsDBObject(this.sort), this.remove, this.getAsDBObject(this.modifier), this.returnNew, this.upsert);
 
-    FindAndModify(DBCollection collection, Unmarshaller unmarshaller, QueryFactory queryFactory, String query, Object... parameters) {
-        this.unmarshaller = unmarshaller;
-        this.collection = collection;
-        this.queryFactory = queryFactory;
-        this.query = this.queryFactory.createQuery(query, parameters);
-    }
+		if (this.historyCollection != null) {
+			// copy elements to history collection
+			DBCursor find = this.collection.find(dbObject);
+			while (find.hasNext()) {
+				DBObject object = find.next();
+				Jongo.copyToHistoryCollection(object, this.historyCollection);
+			}
 
-    public FindAndModify with(String modifier, Object... parameters) {
-        if (modifier == null) throw new IllegalArgumentException("Modifier may not be null");
-        this.modifier = queryFactory.createQuery(modifier, parameters);
-        return this;
-    }
+			// increase version stamps
+			DBObject incModifier = this.queryFactory.createQuery("{ $inc: {" + Jongo.VERSION_FIELD + ": 1 }}").toDBObject();
+			this.collection.update(dbObject, incModifier);
+		}
+		return result == null ? null : resultHandler.map(result);
+	}
+	
+	public FindAndModify projection(String fields) {
+		this.fields = this.queryFactory.createQuery(fields);
+		return this;
+	}
+	
+	public FindAndModify projection(String fields, Object... parameters) {
+		this.fields = this.queryFactory.createQuery(fields, parameters);
+		return this;
+	}
+	
+	public FindAndModify sort(String sort) {
+		this.sort = this.queryFactory.createQuery(sort);
+		return this;
+	}
+	
+	public FindAndModify remove() {
+		this.remove = true;
+		return this;
+	}
+	
+	public FindAndModify returnNew() {
+		this.returnNew = true;
+		return this;
+	}
+	
+	public FindAndModify upsert() {
+		this.upsert = true;
+		return this;
+	}
 
-    public <T> T as(final Class<T> clazz) {
-        return map(newResultHandler(clazz, unmarshaller));
-    }
-
-    public <T> T map(ResultHandler<T> resultHandler) {
-        DBObject result = collection.findAndModify(query.toDBObject(),
-                getAsDBObject(fields),
-                getAsDBObject(sort),
-                remove,
-                getAsDBObject(modifier),
-                returnNew,
-                upsert);
-
-        return result == null ? null : resultHandler.map(result);
-    }
-
-    public FindAndModify projection(String fields) {
-        this.fields = queryFactory.createQuery(fields);
-        return this;
-    }
-
-    public FindAndModify projection(String fields, Object... parameters) {
-        this.fields = queryFactory.createQuery(fields, parameters);
-        return this;
-    }
-
-    public FindAndModify sort(String sort) {
-        this.sort = queryFactory.createQuery(sort);
-        return this;
-    }
-
-    public FindAndModify remove() {
-        this.remove = true;
-        return this;
-    }
-
-    public FindAndModify returnNew() {
-        this.returnNew = true;
-        return this;
-    }
-
-    public FindAndModify upsert() {
-        this.upsert = true;
-        return this;
-    }
-
-    private DBObject getAsDBObject(Query query) {
-        return query == null ? null : query.toDBObject();
-    }
+	private DBObject getAsDBObject(Query query) {
+		return query == null ? null : query.toDBObject();
+	}
 }

@@ -16,53 +16,55 @@
 
 package org.jongo;
 
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.WriteConcern;
+import org.assertj.core.api.Assertions;
 import org.bson.types.ObjectId;
 import org.jongo.model.Friend;
 import org.jongo.util.JongoTestCase;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
+import org.mockito.Mockito;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.*;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.WriteConcern;
 
 public class AlreadyCheckDBObjectTest extends JongoTestCase {
-
-    ArgumentCaptor<DBObject> captor = ArgumentCaptor.forClass(DBObject.class);
-    DBCollection mockedDBCollection = mock(DBCollection.class);
-    ObjectIdUpdater objectIdUpdater = mock(ObjectIdUpdater.class);
-
-    @Test
-    public void shouldPreventLazyDBObjectToBeDeserialized() throws Exception {
-
-        Friend friend = new Friend(ObjectId.get(), "John");
-        ObjectId deserializedOid = ObjectId.get();
-        when(objectIdUpdater.getId(friend)).thenReturn(deserializedOid);
-        Insert insert = new Insert(mockedDBCollection, WriteConcern.UNACKNOWLEDGED, getMapper().getMarshaller(), objectIdUpdater, getMapper().getQueryFactory());
-
-        insert.save(friend);
-
-        verify(mockedDBCollection).save(captor.capture(), eq(WriteConcern.UNACKNOWLEDGED));
-        DBObject value = captor.getValue();
-        assertThat(value.get("_id")).isEqualTo(deserializedOid);
-    }
-
-    @Test
-    public void shouldNotPreventLazyDBObjectToBeDeserializedWhenOidIsNull() throws Exception {
-
-        ObjectId id = ObjectId.get();
-        Friend friend = new Friend(id, "John");
-        when(objectIdUpdater.getId(friend)).thenReturn(null);
-        Insert insert = new Insert(mockedDBCollection, WriteConcern.UNACKNOWLEDGED, getMapper().getMarshaller(), objectIdUpdater, getMapper().getQueryFactory());
-
-        insert.save(friend);
-
-        verify(mockedDBCollection).save(captor.capture(), eq(WriteConcern.UNACKNOWLEDGED));
-        DBObject value = captor.getValue();
-        assertThat(value.get("_id")).isNotNull();
-        assertThat(value.get("_id")).isEqualTo(id);
-    }
+	
+	ArgumentCaptor<DBObject> captor = ArgumentCaptor.forClass(DBObject.class);
+	DBCollection mockedDBCollection = Mockito.mock(DBCollection.class);
+	DBCollection mockedHistoryDBCollection = Mockito.mock(DBCollection.class);
+	ObjectIdUpdater objectIdUpdater = Mockito.mock(ObjectIdUpdater.class);
+	
+	
+	@Test
+	public void shouldPreventLazyDBObjectToBeDeserialized() throws Exception {
+		
+		Friend friend = new Friend(ObjectId.get(), "John");
+		ObjectId deserializedOid = ObjectId.get();
+		Mockito.when(this.objectIdUpdater.getId(friend)).thenReturn(deserializedOid);
+		Insert insert = new Insert(this.mockedDBCollection, this.mockedHistoryDBCollection, WriteConcern.UNACKNOWLEDGED, this.getMapper().getMarshaller(), this.objectIdUpdater, this.getMapper().getQueryFactory());
+		
+		insert.save(friend);
+		
+		Mockito.verify(this.mockedDBCollection).save(this.captor.capture(), Matchers.eq(WriteConcern.UNACKNOWLEDGED));
+		DBObject value = this.captor.getValue();
+		Assertions.assertThat(value.get("_id")).isEqualTo(deserializedOid);
+	}
+	
+	@Test
+	public void shouldNotPreventLazyDBObjectToBeDeserializedWhenOidIsNull() throws Exception {
+		
+		ObjectId id = ObjectId.get();
+		Friend friend = new Friend(id, "John");
+		Mockito.when(this.objectIdUpdater.getId(friend)).thenReturn(null);
+		Insert insert = new Insert(this.mockedDBCollection, this.mockedHistoryDBCollection, WriteConcern.UNACKNOWLEDGED, this.getMapper().getMarshaller(), this.objectIdUpdater, this.getMapper().getQueryFactory());
+		
+		insert.save(friend);
+		
+		Mockito.verify(this.mockedDBCollection).save(this.captor.capture(), Matchers.eq(WriteConcern.UNACKNOWLEDGED));
+		DBObject value = this.captor.getValue();
+		Assertions.assertThat(value.get("_id")).isNotNull();
+		Assertions.assertThat(value.get("_id")).isEqualTo(id);
+	}
 }

@@ -16,13 +16,8 @@
 
 package org.jongo.bench;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.Mongo;
-import com.mongodb.MongoClient;
-import com.mongodb.WriteConcern;
+import java.net.UnknownHostException;
+
 import org.jongo.Jongo;
 import org.jongo.Mapper;
 import org.jongo.MongoCollection;
@@ -30,50 +25,56 @@ import org.jongo.marshall.jackson.JacksonMapper;
 import org.jongo.model.Coordinate;
 import org.jongo.model.Friend;
 
-import java.net.UnknownHostException;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.Mongo;
+import com.mongodb.MongoClient;
+import com.mongodb.WriteConcern;
 
 class BenchUtil {
-
-    public static Friend createFriend(int id) {
-        return new Friend("John" + id, "Address" + id, new Coordinate(1, id));
-    }
-
-    public static DBObject asDBObject(Friend friend) {
-
-        DBObject dbo = new BasicDBObject();
-        dbo.put("name", friend.getName());
-        dbo.put("address", friend.getAddress());
-
-        BasicDBObject coordinate = new BasicDBObject();
-        coordinate.put("lat", friend.getCoordinate().lat);
-        coordinate.put("lng", friend.getCoordinate().lng);
-
-        dbo.put("coordinate", coordinate);
-
-        return dbo;
-    }
-
-    public static DBCollection getCollectionFromDriver() throws UnknownHostException {
-        Mongo nativeMongo = new MongoClient();
-        return nativeMongo.getDB("jongo").getCollection("benchmark");
-    }
-
-    public static MongoCollection getCollectionFromJongo(Mapper mapper) throws UnknownHostException {
-        Mongo mongo = new MongoClient();
-        DB db = mongo.getDB("jongo");
-        Jongo jongo = new Jongo(db, mapper);
-        return jongo.getCollection("benchmark");
-    }
-
-    public static void injectFriendsIntoDB(int nbDocuments) throws UnknownHostException {
-        MongoCollection collection = getCollectionFromJongo(new JacksonMapper.Builder().build());
-        collection.drop();
-        for (int i = 0; i < nbDocuments; i++) {
-            collection.withWriteConcern(WriteConcern.SAFE).save(createFriend(i));
-        }
-        long count = collection.count();
-        if (count < nbDocuments) {
-            throw new RuntimeException("Not enough documents have been saved into db : expected " + nbDocuments + "/ saved: " + count);
-        }
-    }
+	
+	public static Friend createFriend(int id) {
+		return new Friend("John" + id, "Address" + id, new Coordinate(1, id));
+	}
+	
+	public static DBObject asDBObject(Friend friend) {
+		
+		DBObject dbo = new BasicDBObject();
+		dbo.put("name", friend.getName());
+		dbo.put("address", friend.getAddress());
+		
+		BasicDBObject coordinate = new BasicDBObject();
+		coordinate.put("lat", friend.getCoordinate().lat);
+		coordinate.put("lng", friend.getCoordinate().lng);
+		
+		dbo.put("coordinate", coordinate);
+		
+		return dbo;
+	}
+	
+	public static DBCollection getCollectionFromDriver() throws UnknownHostException {
+		Mongo nativeMongo = new MongoClient();
+		return nativeMongo.getDB("jongo").getCollection("benchmark");
+	}
+	
+	public static MongoCollection getCollectionFromJongo(Mapper mapper) throws UnknownHostException {
+		Mongo mongo = new MongoClient();
+		DB db = mongo.getDB("jongo");
+		Jongo jongo = new Jongo(db, mapper, false);
+		return jongo.getCollection("benchmark");
+	}
+	
+	public static void injectFriendsIntoDB(int nbDocuments) throws UnknownHostException {
+		MongoCollection collection = BenchUtil.getCollectionFromJongo(new JacksonMapper.Builder().build());
+		collection.drop();
+		for (int i = 0; i < nbDocuments; i++) {
+			collection.withWriteConcern(WriteConcern.SAFE).save(BenchUtil.createFriend(i));
+		}
+		long count = collection.count();
+		if (count < nbDocuments) {
+			throw new RuntimeException("Not enough documents have been saved into db : expected " + nbDocuments + "/ saved: " + count);
+		}
+	}
 }

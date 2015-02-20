@@ -16,10 +16,12 @@
 
 package org.jongo.spike;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mongodb.DBObject;
-import com.mongodb.QueryBuilder;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.assertj.core.api.Assertions;
 import org.jongo.Jongo;
 import org.jongo.Mapper;
 import org.jongo.MongoCollection;
@@ -37,146 +39,149 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.DBObject;
+import com.mongodb.QueryBuilder;
 
 public class QuestionsSpikeTest extends JongoTestCase {
-
-    private MongoCollection collection;
-
-    @Before
-    public void setUp() throws Exception {
-        collection = createEmptyCollection("friends");
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        dropCollection("friends");
-    }
-
-    @Test
-    // http://stackoverflow.com/questions/10444038/mongo-db-query-in-java/10445169#10445169
-    public void complexQueryWithDriverAndJongo() throws Exception {
-
-        List<String> keys = new ArrayList<String>();
-        collection.findOne("{$or:[{key1: {$in:[764]}},{key2:{$in:[#]}}, {$and:[{key3:3},{key4:67}]}]}", keys).as(Friend.class);
-
-        DBObject query = QueryBuilder
-                .start()
-                .or(QueryBuilder.start("key1").in(764).get(), QueryBuilder.start("key2").in(keys).get(),
-                        QueryBuilder.start().and("key3").is(3).and("key4").is(64).get()).get();
-
-        getDatabase().getCollection("friends").find(query);
-    }
-
-    @Test
-    // https://groups.google.com/forum/?hl=fr&fromgroups#!topic/jongo-user/ga3n5_ybYm4
-    public void pushANonBSONObject() throws Exception {
-        Party party = new Party();
-        party.with(new Friend("john"));
-        party.with(new Friend("peter"));
-        collection.save(party);
-
-        DBObject robert = new JacksonEngine(Mapping.defaultMapping()).marshall(new Friend("Robert")).toDBObject();
-        collection.update("{}").with("{$push:{friends:" + robert.toString() + "}}");
-
-        assertThat(collection.count("{ 'friends.name' : 'Robert'}")).isEqualTo(1);
-    }
-
-    @Test
-    // https://groups.google.com/forum/?fromgroups=#!topic/jongo-user/UVOEmP-ql_k
-    public void canHandleElemMatchOperator() throws Exception {
-
-        assumeThatMongoVersionIsGreaterThan("2.1.1");
-
-        collection.insert("{version : 1, days:[{name:'monday'},{name:'sunday'}]}");
-        collection.insert("{version : 2, days:[{name:'wednesday'}]}");
-
-        Map result = collection.findOne("{version:1}").projection("{days:{$elemMatch:{name: 'monday'}}}").as(Map.class);
-
-        List days = (List) result.get("days");
-        assertThat(((Map) days.get(0)).get("name")).isEqualTo("monday");
-    }
-
-    @Test
-    //https://groups.google.com/forum/?fromgroups#!topic/jongo-user/Nu4J1tK0kAM
-    public void canSelectOnlyAField() throws Exception {
-
-        final Unmarshaller unmarshaller = getMapper().getUnmarshaller();
-        Party party = new Party();
-        party.with(new Friend("John"));
-        party.with(new Friend("Peter"));
-        party.with(new Friend("Robert"));
-        collection.save(party);
-
-        Friend friend = collection.findOne("{friends.name:'Peter'}").projection("{friends.$:1}").map(new ResultHandler<Friend>() {
-            public Friend map(DBObject dbo) {
-                BsonDocument document = Bson.createDocument(dbo);
-                Party result = unmarshaller.unmarshall(document, Party.class);
-                return result.friends.get(0);
-            }
-        });
-
-        assertThat(friend.getName()).isEqualTo("Peter");
-    }
-
-    @Test
-    //https://groups.google.com/forum/?fromgroups#!topic/jongo-user/p9CEKnkKX9Q
-    public void canUpdateIntoAnArray() throws Exception {
-
-        collection.insert("{friends:[{name:'Robert'},{name:'Peter'}]}");
-    
-        collection.update("{ 'friends.name' : 'Peter' }").with("{ $set : { 'friends.$' : #} }", new Friend("John"));
-
-        Party party = collection.findOne().as(Party.class);
-
-        assertThat(party.friends).extracting("name").containsExactly("Robert", "John");
-    }
-
-    @Test
-    //https://github.com/bguerout/jongo/issues/187
-    public void canUseElemMatchWithDateParams() throws Exception {
-
-        Date now = new Date();
-        collection.insert("{flag:'ko', values: [{name: 'Client2', type: 'void',value: ''}]}");
-        collection.insert("{flag:'ok', values: [{name: 'Client', type: 'void',value: ''},{name: 'Date',type: 'date',value: #}]}", now);
-
-        Map map = collection.findOne("{values: {$elemMatch: {value : #}}}", now).as(Map.class);
-
-        assertThat(map).isNotNull();
-        assertThat(map.get("flag")).isEqualTo("ok");
-    }
-
-    @Test
-    //https://github.com/bguerout/jongo/issues/226
-    public void canSetAFieldToNullDuringAnUpdate() throws Exception {
-
-        Mapper mapper = new JacksonMapper.Builder().addModifier(new MapperModifier() {
-            public void modify(ObjectMapper mapper) {
-                mapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
-            }
-        }).build();
-        Jongo jongo = new Jongo(getDatabase(), mapper);
-        MongoCollection friends = jongo.getCollection("friends");
-        Friend friend = new Friend("Peter", "31 rue des Lilas");
-        friends.save(friend);
-
-        friends.update(friend.getId()).with(new Friend("John"));
-
-        Friend updated = friends.findOne().as(Friend.class);
-        assertThat(updated.getName()).isEqualTo("John");
-        assertThat(updated.getAddress()).isNull();
-    }
-
-    private static class Party {
-        private List<Friend> friends = new ArrayList<Friend>();
-
-        public void with(Friend friend) {
-            friends.add(friend);
-        }
-    }
+	
+	private MongoCollection collection;
+	
+	
+	@Before
+	public void setUp() throws Exception {
+		this.collection = this.createEmptyCollection("friends");
+	}
+	
+	@After
+	public void tearDown() throws Exception {
+		this.dropCollection("friends");
+	}
+	
+	@Test
+	// http://stackoverflow.com/questions/10444038/mongo-db-query-in-java/10445169#10445169
+	public void complexQueryWithDriverAndJongo() throws Exception {
+		
+		List<String> keys = new ArrayList<String>();
+		this.collection.findOne("{$or:[{key1: {$in:[764]}},{key2:{$in:[#]}}, {$and:[{key3:3},{key4:67}]}]}", keys).as(Friend.class);
+		
+		DBObject query = QueryBuilder.start().or(QueryBuilder.start("key1").in(764).get(), QueryBuilder.start("key2").in(keys).get(), QueryBuilder.start().and("key3").is(3).and("key4").is(64).get()).get();
+		
+		this.getDatabase().getCollection("friends").find(query);
+	}
+	
+	@Test
+	// https://groups.google.com/forum/?hl=fr&fromgroups#!topic/jongo-user/ga3n5_ybYm4
+	public void pushANonBSONObject() throws Exception {
+		Party party = new Party();
+		party.with(new Friend("john"));
+		party.with(new Friend("peter"));
+		this.collection.save(party);
+		
+		DBObject robert = new JacksonEngine(Mapping.defaultMapping()).marshall(new Friend("Robert")).toDBObject();
+		this.collection.update("{}").with("{$push:{friends:" + robert.toString() + "}}");
+		
+		Assertions.assertThat(this.collection.count("{ 'friends.name' : 'Robert'}")).isEqualTo(1);
+	}
+	
+	@Test
+	// https://groups.google.com/forum/?fromgroups=#!topic/jongo-user/UVOEmP-ql_k
+	public void canHandleElemMatchOperator() throws Exception {
+		
+		this.assumeThatMongoVersionIsGreaterThan("2.1.1");
+		
+		this.collection.insert("{version : 1, days:[{name:'monday'},{name:'sunday'}]}");
+		this.collection.insert("{version : 2, days:[{name:'wednesday'}]}");
+		
+		Map result = this.collection.findOne("{version:1}").projection("{days:{$elemMatch:{name: 'monday'}}}").as(Map.class);
+		
+		List days = (List) result.get("days");
+		Assertions.assertThat(((Map) days.get(0)).get("name")).isEqualTo("monday");
+	}
+	
+	@Test
+	// https://groups.google.com/forum/?fromgroups#!topic/jongo-user/Nu4J1tK0kAM
+	public void canSelectOnlyAField() throws Exception {
+		
+		final Unmarshaller unmarshaller = this.getMapper().getUnmarshaller();
+		Party party = new Party();
+		party.with(new Friend("John"));
+		party.with(new Friend("Peter"));
+		party.with(new Friend("Robert"));
+		this.collection.save(party);
+		
+		Friend friend = this.collection.findOne("{friends.name:'Peter'}").projection("{friends.$:1}").map(new ResultHandler<Friend>() {
+			
+			@Override
+			public Friend map(DBObject dbo) {
+				BsonDocument document = Bson.createDocument(dbo);
+				Party result = unmarshaller.unmarshall(document, Party.class);
+				return result.friends.get(0);
+			}
+		});
+		
+		Assertions.assertThat(friend.getName()).isEqualTo("Peter");
+	}
+	
+	@Test
+	// https://groups.google.com/forum/?fromgroups#!topic/jongo-user/p9CEKnkKX9Q
+	public void canUpdateIntoAnArray() throws Exception {
+		
+		this.collection.insert("{friends:[{name:'Robert'},{name:'Peter'}]}");
+		
+		this.collection.update("{ 'friends.name' : 'Peter' }").with("{ $set : { 'friends.$' : #} }", new Friend("John"));
+		
+		Party party = this.collection.findOne().as(Party.class);
+		
+		Assertions.assertThat(party.friends).extracting("name").containsExactly("Robert", "John");
+	}
+	
+	@Test
+	// https://github.com/bguerout/jongo/issues/187
+	public void canUseElemMatchWithDateParams() throws Exception {
+		
+		Date now = new Date();
+		this.collection.insert("{flag:'ko', values: [{name: 'Client2', type: 'void',value: ''}]}");
+		this.collection.insert("{flag:'ok', values: [{name: 'Client', type: 'void',value: ''},{name: 'Date',type: 'date',value: #}]}", now);
+		
+		Map map = this.collection.findOne("{values: {$elemMatch: {value : #}}}", now).as(Map.class);
+		
+		Assertions.assertThat(map).isNotNull();
+		Assertions.assertThat(map.get("flag")).isEqualTo("ok");
+	}
+	
+	@Test
+	// https://github.com/bguerout/jongo/issues/226
+	public void canSetAFieldToNullDuringAnUpdate() throws Exception {
+		
+		Mapper mapper = new JacksonMapper.Builder().addModifier(new MapperModifier() {
+			
+			@Override
+			public void modify(ObjectMapper mapper) {
+				mapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
+			}
+		}).build();
+		Jongo jongo = new Jongo(this.getDatabase(), mapper, false);
+		MongoCollection friends = jongo.getCollection("friends");
+		Friend friend = new Friend("Peter", "31 rue des Lilas");
+		friends.save(friend);
+		
+		friends.update(friend.getId()).with(new Friend("John"));
+		
+		Friend updated = friends.findOne().as(Friend.class);
+		Assertions.assertThat(updated.getName()).isEqualTo("John");
+		Assertions.assertThat(updated.getAddress()).isNull();
+	}
+	
+	
+	private static class Party {
+		
+		private List<Friend> friends = new ArrayList<Friend>();
+		
+		
+		public void with(Friend friend) {
+			this.friends.add(friend);
+		}
+	}
 }

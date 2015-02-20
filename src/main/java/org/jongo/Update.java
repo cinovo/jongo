@@ -16,74 +16,100 @@
 
 package org.jongo;
 
-import com.mongodb.*;
 import org.bson.LazyBSONObject;
 import org.jongo.query.Query;
 import org.jongo.query.QueryFactory;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
+import com.mongodb.WriteConcern;
+import com.mongodb.WriteResult;
+
 public class Update {
+	
+	private final DBCollection collection;
+	private final Query query;
+	private final QueryFactory queryFactory;
+	
+	private WriteConcern writeConcern;
+	private boolean upsert = false;
+	private boolean multi = false;
+	private DBCollection historyCollection;
+	
+	
+	Update(DBCollection collection, DBCollection historyCollection, WriteConcern writeConcern, QueryFactory queryFactory, String query, Object... parameters) {
+		this.collection = collection;
+		this.historyCollection = historyCollection;
+		this.writeConcern = writeConcern;
+		this.queryFactory = queryFactory;
+		this.query = this.createQuery(query, parameters);
+	}
+	
+	public WriteResult with(String modifier) {
+		return this.with(modifier, new Object[0]);
+	}
+	
+	public WriteResult with(String modifier, Object... parameters) {
+		Query updateQuery = this.queryFactory.createQuery(modifier, parameters);
+		WriteResult writeResult = this.collection.update(this.query.toDBObject(), updateQuery.toDBObject(), this.upsert, this.multi, this.writeConcern);
+		
+		return writeResult;
+	}
+	
+	public WriteResult with(Object pojo) {
+		
+		DBObject updateDbo = this.queryFactory.createQuery("{$set:#}", pojo).toDBObject();
+		this.removeIdField(updateDbo);
+		DBObject findQuery = this.query.toDBObject();
+		WriteResult writeResult = this.collection.update(findQuery, updateDbo, this.upsert, this.multi, this.writeConcern);
+		
+		if (this.historyCollection != null) {
+			// copy elements to history collection
+			DBCursor find = this.collection.find(findQuery);
+			while (find.hasNext()) {
+				DBObject object = find.next();
+				Jongo.copyToHistoryCollection(object, this.historyCollection);
+			}
 
-    private final DBCollection collection;
-    private final Query query;
-    private final QueryFactory queryFactory;
-
-    private WriteConcern writeConcern;
-    private boolean upsert = false;
-    private boolean multi = false;
-
-    Update(DBCollection collection, WriteConcern writeConcern, QueryFactory queryFactory, String query, Object... parameters) {
-        this.collection = collection;
-        this.writeConcern = writeConcern;
-        this.queryFactory = queryFactory;
-        this.query = createQuery(query, parameters);
-    }
-
-    public WriteResult with(String modifier) {
-        return with(modifier, new Object[0]);
-    }
-
-    public WriteResult with(String modifier, Object... parameters) {
-        Query updateQuery = queryFactory.createQuery(modifier, parameters);
-        return collection.update(this.query.toDBObject(), updateQuery.toDBObject(), upsert, multi, writeConcern);
-    }
-
-    public WriteResult with(Object pojo) {
-
-        DBObject updateDbo = queryFactory.createQuery("{$set:#}", pojo).toDBObject();
-        removeIdField(updateDbo);
-        return collection.update(this.query.toDBObject(), updateDbo, upsert, multi, writeConcern);
-    }
-
-    private void removeIdField(DBObject updateDbo) {
-        DBObject pojoAsDbo = (DBObject) updateDbo.get("$set");
-        if (pojoAsDbo.containsField("_id")) {
-            // Need to materialize lazy objects which are read only
-            if (pojoAsDbo instanceof LazyBSONObject) {
-                BasicDBObject expanded = new BasicDBObject();
-                expanded.putAll(pojoAsDbo);
-                updateDbo.put("$set", expanded);
-                pojoAsDbo = expanded;
-            }
-            pojoAsDbo.removeField("_id");
-        }
-    }
-
-    public Update upsert() {
-        this.upsert = true;
-        return this;
-    }
-
-    public Update multi() {
-        this.multi = true;
-        return this;
-    }
-
-    private Query createQuery(String query, Object[] parameters) {
-        try {
-            return this.queryFactory.createQuery(query, parameters);
-        } catch (Exception e) {
-            String message = String.format("Unable execute update operation using query %s", query);
-            throw new IllegalArgumentException(message, e);
-        }
-    }
+			// increase version stamps
+			DBObject incModifier = this.queryFactory.createQuery("{$inc:{" + Jongo.VERSION_FIELD + ": 1}}").toDBObject();
+			this.collection.update(findQuery, incModifier);
+		}
+		return writeResult;
+	}
+	
+	private void removeIdField(DBObject updateDbo) {
+		DBObject pojoAsDbo = (DBObject) updateDbo.get("$set");
+		if (pojoAsDbo.containsField("_id")) {
+			// Need to materialize lazy objects which are read only
+			if (pojoAsDbo instanceof LazyBSONObject) {
+				BasicDBObject expanded = new BasicDBObject();
+				expanded.putAll(pojoAsDbo);
+				updateDbo.put("$set", expanded);
+				pojoAsDbo = expanded;
+			}
+			pojoAsDbo.removeField("_id");
+		}
+	}
+	
+	public Update upsert() {
+		this.upsert = true;
+		return this;
+	}
+	
+	public Update multi() {
+		this.multi = true;
+		return this;
+	}
+	
+	private Query createQuery(String query, Object[] parameters) {
+		try {
+			return this.queryFactory.createQuery(query, parameters);
+		} catch (Exception e) {
+			String message = String.format("Unable execute update operation using query %s", query);
+			throw new IllegalArgumentException(message, e);
+		}
+	}
 }

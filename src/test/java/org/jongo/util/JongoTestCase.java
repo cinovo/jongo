@@ -16,68 +16,69 @@
 
 package org.jongo.util;
 
-import com.mongodb.CommandResult;
-import com.mongodb.DB;
+import java.net.UnknownHostException;
+
 import org.jongo.Jongo;
 import org.jongo.Mapper;
 import org.jongo.MongoCollection;
 import org.jongo.marshall.jackson.JacksonMapper;
+import org.junit.Assume;
 import org.junit.BeforeClass;
 
-import java.net.UnknownHostException;
-
-import static org.junit.Assume.assumeTrue;
+import com.mongodb.CommandResult;
+import com.mongodb.DB;
 
 public abstract class JongoTestCase {
 
-    private static MongoResource mongoResource;
+	private static MongoResource mongoResource;
 
-    private Jongo jongo;
-    private Mapper mapper;
+	private Jongo jongo;
+	private Mapper mapper;
 
-    public JongoTestCase() {
-        this.mapper = new JacksonMapper.Builder().build();
-        this.jongo = new Jongo(mongoResource.getDb("test_jongo"), mapper);
-    }
 
-    @BeforeClass
-    public static void startMongo() throws Exception {
-        mongoResource = new MongoResource();
-    }
+	public JongoTestCase() {
+		this.mapper = new JacksonMapper.Builder().build();
+		this.jongo = new Jongo(JongoTestCase.mongoResource.getDb("test_jongo"), this.mapper, false);
+	}
 
-    protected MongoCollection createEmptyCollection(String collectionName) throws UnknownHostException {
-        MongoCollection col = jongo.getCollection(collectionName);
-        col.drop();
-        return col;
-    }
+	@BeforeClass
+	public static void startMongo() throws Exception {
+		JongoTestCase.mongoResource = new MongoResource();
+	}
 
-    protected void dropCollection(String collectionName) throws UnknownHostException {
-        getDatabase().getCollection(collectionName).drop();
-    }
+	protected MongoCollection createEmptyCollection(String collectionName) throws UnknownHostException {
+		MongoCollection col = this.jongo.getCollection(collectionName);
+		col.drop();
+		return col;
+	}
 
-    protected DB getDatabase() throws UnknownHostException {
-        return jongo.getDatabase();
-    }
+	protected void dropCollection(String collectionName) throws UnknownHostException {
+		this.getDatabase().getCollection(collectionName).drop();
+	}
 
-    protected Jongo getJongo() {
-        return jongo;
-    }
+	protected DB getDatabase() throws UnknownHostException {
+		return this.jongo.getDatabase();
+	}
 
-    protected Mapper getMapper() {
-        return mapper;
-    }
+	protected Jongo getJongo() {
+		return this.jongo;
+	}
 
-    protected void assumeThatMongoVersionIsGreaterThan(String expectedVersion) throws UnknownHostException {
-        int expectedVersionAsInt = Integer.valueOf(expectedVersion.replaceAll("\\.", ""));
-        CommandResult buildInfo = getDatabase().command("buildInfo");
-        String version = (String) buildInfo.get("version");
-        int currentVersion = Integer.valueOf(version.replaceAll("\\.", ""));
-        assumeTrue(currentVersion >= expectedVersionAsInt);
-    }
+	protected Mapper getMapper() {
+		return this.mapper;
+	}
 
-    public void prepareMarshallingStrategy(Mapper mapper) {
-        this.mapper = mapper;
-        this.jongo = new Jongo(mongoResource.getDb("test_jongo"), mapper);
-    }
+	protected void assumeThatMongoVersionIsGreaterThan(String expectedVersion) throws UnknownHostException {
+		int expectedVersionAsInt = Integer.valueOf(expectedVersion.replaceAll("\\.", ""));
+		CommandResult buildInfo = this.getDatabase().command("buildInfo");
+		String version = (String) buildInfo.get("version");
+		int currentVersion = Integer.valueOf(version.replaceAll("\\.", ""));
+		Assume.assumeTrue(currentVersion >= expectedVersionAsInt);
+	}
+
+	public void prepareMarshallingStrategy(Mapper mapper) {
+		this.mapper = mapper;
+		this.jongo = new Jongo(JongoTestCase.mongoResource.getDb("test_jongo"), mapper, false);
+	}
 
 }

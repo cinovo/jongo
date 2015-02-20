@@ -16,44 +16,43 @@
 
 package org.jongo;
 
+import org.assertj.core.api.Assertions;
 import org.jongo.model.Friend;
 import org.jongo.query.Query;
 import org.jongo.util.JongoTestCase;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class JongoTest extends JongoTestCase {
-
-    @Test
-    public void canObtainACollection() throws Exception {
-
-        Jongo jongo = new Jongo(getDatabase());
-
-        MongoCollection collection = jongo.getCollection("collection-name");
-
-        assertThat(collection).isNotNull();
-        assertThat(collection.getName()).isEqualTo("collection-name");
-    }
-
-    @Test
-    public void canCreateQuery() throws Exception {
-
-        Jongo jongo = new Jongo(getDatabase());
-
-        Query query = jongo.createQuery("{test:1}");
-
-        assertThat(query.toDBObject().get("test")).isEqualTo(1);
-    }
-
-    @Test
-    public void canGetMapper() throws Exception {
-
-        Jongo jongo = new Jongo(getDatabase());
-
-        Mapper mapper = jongo.getMapper();
-
-        assertThat(mapper).isNotNull();
-        assertThat(mapper.getMarshaller().marshall(new Friend("test"))).isNotNull();
-    }
+	
+	@Test
+	public void canObtainACollection() throws Exception {
+		
+		Jongo jongo = new Jongo(this.getDatabase(), false);
+		
+		MongoCollection collection = jongo.getCollection("collection-name");
+		
+		Assertions.assertThat(collection).isNotNull();
+		Assertions.assertThat(collection.getName()).isEqualTo("collection-name");
+	}
+	
+	@Test
+	public void canCreateQuery() throws Exception {
+		
+		Jongo jongo = new Jongo(this.getDatabase(), false);
+		
+		Query query = jongo.createQuery("{test:1}");
+		
+		Assertions.assertThat(query.toDBObject().get("test")).isEqualTo(1);
+	}
+	
+	@Test
+	public void canGetMapper() throws Exception {
+		
+		Jongo jongo = new Jongo(this.getDatabase(), false);
+		
+		Mapper mapper = jongo.getMapper();
+		
+		Assertions.assertThat(mapper).isNotNull();
+		Assertions.assertThat(mapper.getMarshaller().marshall(new Friend("test"))).isNotNull();
+	}
 }
