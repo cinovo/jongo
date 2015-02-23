@@ -16,6 +16,8 @@
 
 package org.jongo;
 
+import java.util.Date;
+
 import org.bson.LazyBSONObject;
 import org.jongo.bson.BsonDBDecoder;
 import org.jongo.bson.BsonDBEncoder;
@@ -28,41 +30,48 @@ import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 
 public class Jongo {
-	
+
 	/**
 	 * Name of the version field
 	 */
 	public static final String VERSION_FIELD = "_version";
+
+	/**
+	 * Name of the field indicating the last change of the document
+	 */
+	public static final String LASTCHANGE_FIELD = "_lastChange";
+
 	/**
 	 * Name of the id field
 	 */
 	public static final String ID_FIELD = "_id";
+	
 	/**
-	 * Name of the id field
+	 * Name of the doc id field (reference to the origin document)
 	 */
 	public static final String REFID_FIELD = "_docId";
-
+	
 	private final DB database;
 	private final Mapper mapper;
-
+	
 	private final boolean audited;
-
-
+	
+	
 	public Jongo(DB database, boolean audited) {
 		this(database, new JacksonMapper.Builder().build(), audited);
 	}
-
+	
 	public Jongo(DB database, Mapper mapper, boolean audited) {
 		this.database = database;
 		this.mapper = mapper;
 		this.audited = audited;
 	}
-
+	
 	public MongoCollection getCollection(String name) {
 		DBCollection dbCollection = this.database.getCollection(name);
 		dbCollection.setDBDecoderFactory(BsonDBDecoder.FACTORY);
 		dbCollection.setDBEncoderFactory(BsonDBEncoder.FACTORY);
-
+		
 		DBCollection dbHistoryCollection = null;
 		if (this.audited) {
 			dbHistoryCollection = this.database.getCollection(name + "_history");
@@ -71,27 +80,27 @@ public class Jongo {
 		}
 		return new MongoCollection(dbCollection, dbHistoryCollection, this.mapper);
 	}
-
+	
 	public DB getDatabase() {
 		return this.database;
 	}
-
+	
 	public Mapper getMapper() {
 		return this.mapper;
 	}
-
+	
 	public Query createQuery(String query, Object... parameters) {
 		return this.mapper.getQueryFactory().createQuery(query, parameters);
 	}
-
+	
 	public Command runCommand(String query) {
 		return this.runCommand(query, new Object[0]);
 	}
-
+	
 	public Command runCommand(String query, Object... parameters) {
 		return new Command(this.database, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
 	}
-	
+
 	protected static DBObject copyToHistoryCollection(DBObject dbo, DBCollection historyCollection) {
 		if (historyCollection != null) {
 			// clone the dbo
@@ -101,7 +110,7 @@ public class Jongo {
 			Jongo.increaseVersion(clone);
 			historyCollection.insert(clone);
 		}
-
+		
 		DBObject result = dbo;
 		if (result instanceof LazyBSONObject) {
 			// materialize lazy bson
@@ -112,7 +121,7 @@ public class Jongo {
 		Jongo.increaseVersion(result);
 		return result;
 	}
-
+	
 	protected static void increaseVersion(IWithVersion pojo) {
 		if (pojo.getDocumentVersion() == null) {
 			pojo.setDocumentVersion(1);
@@ -120,15 +129,16 @@ public class Jongo {
 			pojo.setDocumentVersion(pojo.getDocumentVersion() + 1);
 		}
 	}
-
+	
 	protected static void increaseVersion(DBObject dbo) {
 		if (dbo.containsField(Jongo.VERSION_FIELD)) {
 			dbo.put(Jongo.VERSION_FIELD, Integer.parseInt(String.valueOf(dbo.get(Jongo.VERSION_FIELD))) + 1);
 		} else {
 			dbo.put(Jongo.VERSION_FIELD, 1);
 		}
+		dbo.put(Jongo.LASTCHANGE_FIELD, new Date());
 	}
-
+	
 	private static void copyIdField(DBObject dbo) {
 		if (dbo.containsField(Jongo.ID_FIELD)) {
 			Object id = dbo.get(Jongo.ID_FIELD);
@@ -136,5 +146,5 @@ public class Jongo {
 			dbo.removeField(Jongo.ID_FIELD);
 		}
 	}
-
+	
 }
