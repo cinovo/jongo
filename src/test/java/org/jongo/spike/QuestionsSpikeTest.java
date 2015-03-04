@@ -113,7 +113,6 @@ public class QuestionsSpikeTest extends JongoTestCase {
 		
 		Friend friend = this.collection.findOne("{friends.name:'Peter'}").projection("{friends.$:1}").map(new ResultHandler<Friend>() {
 			
-			@Override
 			public Friend map(DBObject dbo) {
 				BsonDocument document = Bson.createDocument(dbo);
 				Party result = unmarshaller.unmarshall(document, Party.class);
@@ -157,7 +156,6 @@ public class QuestionsSpikeTest extends JongoTestCase {
 		
 		Mapper mapper = new JacksonMapper.Builder().addModifier(new MapperModifier() {
 			
-			@Override
 			public void modify(ObjectMapper mapper) {
 				mapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
 			}

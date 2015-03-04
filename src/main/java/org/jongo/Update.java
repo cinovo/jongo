@@ -70,11 +70,11 @@ public class Update {
 			DBCursor find = this.collection.find(findQuery);
 			while (find.hasNext()) {
 				DBObject object = find.next();
-				Jongo.copyToHistoryCollection(object, this.historyCollection);
+				Auditing.copyToHistoryCollection(object, this.historyCollection);
 			}
 
 			// increase version stamps
-			DBObject incModifier = this.queryFactory.createQuery("{$inc:{" + Jongo.VERSION_FIELD + ": 1}}").toDBObject();
+			DBObject incModifier = this.queryFactory.createQuery("{$inc:{" + Auditing.VERSION_FIELD + ": 1}}").toDBObject();
 			this.collection.update(findQuery, incModifier);
 		}
 		return writeResult;

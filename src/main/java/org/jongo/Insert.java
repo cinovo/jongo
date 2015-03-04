@@ -54,10 +54,10 @@ class Insert {
 	
 	public WriteResult save(Object pojo) {
 		Object id = this.preparePojo(pojo);
-		DBObject dbo = Jongo.copyToHistoryCollection(this.convertToDBObject(pojo, id), this.historyCollection);
+		DBObject dbo = Auditing.copyToHistoryCollection(this.convertToDBObject(pojo, id), this.historyCollection);
 		if (this.historyCollection != null) {
 			if (pojo instanceof IWithVersion) {
-				Jongo.increaseVersion((IWithVersion) pojo);
+				Auditing.increaseVersion((IWithVersion) pojo);
 			}
 		}
 		return this.collection.save(dbo, this.writeConcern);
@@ -68,10 +68,10 @@ class Insert {
 		for (Object pojo : pojos) {
 			Object id = this.preparePojo(pojo);
 			DBObject dbo = this.convertToDBObject(pojo, id);
-			dbos.add(Jongo.copyToHistoryCollection(dbo, this.historyCollection));
+			dbos.add(Auditing.copyToHistoryCollection(dbo, this.historyCollection));
 			if (this.historyCollection != null) {
 				if (pojo instanceof IWithVersion) {
-					Jongo.increaseVersion((IWithVersion) pojo);
+					Auditing.increaseVersion((IWithVersion) pojo);
 				}
 			}
 		}
@@ -84,7 +84,7 @@ class Insert {
 			return this.insert(((BasicDBList) dbo).toArray());
 		}
 
-		dbo = Jongo.copyToHistoryCollection(dbo, this.historyCollection);
+		dbo = Auditing.copyToHistoryCollection(dbo, this.historyCollection);
 
 		return this.collection.insert(dbo, this.writeConcern);
 	}
