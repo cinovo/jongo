@@ -56,11 +56,22 @@ public class Jongo {
 
 	private final boolean audited;
 
+	public Jongo(DB database) {
+        this(database, new JacksonMapper.Builder().build());
+    }
 
+    public Jongo(DB database, Mapper mapper) {
+        this.database = database;
+        this.mapper = mapper;
+        this.audited = false;
+    }
+
+    // new constructor to enable auditing
 	public Jongo(DB database, boolean audited) {
 		this(database, new JacksonMapper.Builder().build(), audited);
 	}
 
+    // new constructor to enable auditing
 	public Jongo(DB database, Mapper mapper, boolean audited) {
 		this.database = database;
 		this.mapper = mapper;
