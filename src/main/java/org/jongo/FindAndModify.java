@@ -69,11 +69,11 @@ public class FindAndModify {
 			DBCursor find = this.collection.find(dbObject);
 			while (find.hasNext()) {
 				DBObject object = find.next();
-				Jongo.copyToHistoryCollection(object, this.historyCollection);
+				Auditing.copyToHistoryCollection(object, this.historyCollection);
 			}
 
 			// increase version stamps
-			DBObject incModifier = this.queryFactory.createQuery("{ $inc: {" + Jongo.VERSION_FIELD + ": 1 }}").toDBObject();
+			DBObject incModifier = this.queryFactory.createQuery("{ $inc: {" + Auditing.VERSION_FIELD + ": 1 }}").toDBObject();
 			this.collection.update(dbObject, incModifier);
 		}
 		return result == null ? null : resultHandler.map(result);
