@@ -89,6 +89,10 @@ public class MongoCollection {
 	public Find find(String query, Object... parameters) {
 		return new Find(this.collection, this.readPreference, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
 	}
+	
+	public Find findHistory(String query, Object... parameters) {
+		return new Find(this.historyCollection, this.readPreference, this.mapper.getUnmarshaller(), this.mapper.getQueryFactory(), query, parameters);
+	}
 
 	public FindAndModify findAndModify() {
 		return this.findAndModify(MongoCollection.ALL);
